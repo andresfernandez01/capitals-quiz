@@ -358,6 +358,17 @@
 
     <div class="toggle-row">
       <div class="toggle-label">
+        <span>Background music</span>
+        <span>Calm ambient tones while quiz runs</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="musicToggle">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-label">
         <span>Keep screen on</span>
         <span id="wlDesc">Prevents screen timeout while playing (Android Chrome)</span>
       </div>
@@ -745,12 +756,14 @@ function startQuiz() {
   idx = 0;
   document.getElementById('setupCard').style.display = 'none';
   document.getElementById('quizCard').style.display = 'block';
+  startMusic();
   showEntry();
 }
 
 function stopQuiz() {
   clearTimeout(autoTimer);
   window.speechSynthesis.cancel();
+  stopMusic();
   document.getElementById('quizCard').style.display = 'none';
   document.getElementById('setupCard').style.display = 'block';
 }
@@ -765,8 +778,12 @@ function showEntry() {
   document.getElementById('counter').textContent = `${idx + 1} / ${entries.length}`;
   document.getElementById('country').textContent = country;
   document.getElementById('continent').textContent = continent;
-  document.getElementById('capital').textContent = capital;
-  document.getElementById('capital').classList.remove('visible');
+
+  // Fix flash: remove visible first (fades out), then swap text after transition
+  const capEl = document.getElementById('capital');
+  capEl.classList.remove('visible');
+  setTimeout(() => { capEl.textContent = capital; }, 420);
+
   document.getElementById('btnPrev').disabled = idx === 0;
   document.getElementById('btnNext').disabled = false;
   document.getElementById('statusBar').textContent = `Thinking time: ${pause}s…`;
@@ -819,6 +836,87 @@ function speak(text, onEnd) {
   if (onEnd) u.onend = onEnd;
   window.speechSynthesis.speak(u);
 }
+
+// ── Ambient Music Engine ──────────────────────────────────────────────────────
+// Gentle generative ambient: slow pad chords using sine/triangle oscillators
+let audioCtx = null;
+let musicNodes = [];
+let musicRunning = false;
+let musicScheduleTimer = null;
+
+// Pentatonic-ish chord voicings (frequencies in Hz) — calm, no dissonance
+const CHORD_SETS = [
+  [130.81, 164.81, 196.00, 261.63], // C3 E3 G3 C4
+  [146.83, 174.61, 220.00, 293.66], // D3 F3 A3 D4
+  [110.00, 146.83, 174.61, 220.00], // A2 D3 F3 A3
+  [123.47, 155.56, 185.00, 246.94], // B2 Eb3 F#3 B3
+  [130.81, 155.56, 196.00, 261.63], // C3 Eb3 G3 C4
+];
+
+function startMusic() {
+  if (musicRunning) return;
+  if (!document.getElementById('musicToggle').checked) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  musicRunning = true;
+  scheduleNextChord();
+}
+
+function stopMusic() {
+  musicRunning = false;
+  clearTimeout(musicScheduleTimer);
+  musicNodes.forEach(n => { try { n.stop(); } catch(e) {} });
+  musicNodes = [];
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+}
+
+function scheduleNextChord() {
+  if (!musicRunning) return;
+  const chord = CHORD_SETS[Math.floor(Math.random() * CHORD_SETS.length)];
+  playChord(chord, 6.0); // each chord lasts 6s with slow fade
+  musicScheduleTimer = setTimeout(scheduleNextChord, 5500); // slight overlap
+}
+
+function playChord(freqs, duration) {
+  if (!audioCtx || !musicRunning) return;
+  const masterGain = audioCtx.createGain();
+  masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+  masterGain.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + 1.5); // slow attack
+  masterGain.gain.linearRampToValueAtTime(0.06, audioCtx.currentTime + duration - 2.0);
+  masterGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration); // slow release
+  masterGain.connect(audioCtx.destination);
+
+  freqs.forEach(freq => {
+    // Main tone
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    // Slight detune for warmth
+    const osc2 = audioCtx.createOscillator();
+    osc2.type = 'triangle';
+    osc2.frequency.setValueAtTime(freq * 1.002, audioCtx.currentTime);
+
+    const oscGain = audioCtx.createGain();
+    oscGain.gain.value = 0.5;
+
+    osc.connect(oscGain);
+    osc2.connect(oscGain);
+    oscGain.connect(masterGain);
+
+    osc.start(audioCtx.currentTime);
+    osc2.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + duration);
+    osc2.stop(audioCtx.currentTime + duration);
+    musicNodes.push(osc, osc2);
+  });
+}
+
+document.getElementById('musicToggle').addEventListener('change', function() {
+  if (this.checked && musicRunning === false && document.getElementById('quizCard').style.display !== 'none') {
+    startMusic();
+  } else if (!this.checked) {
+    stopMusic();
+  }
+});
 
 document.addEventListener('keydown', e => {
   if (document.getElementById('quizCard').style.display === 'none') return;
