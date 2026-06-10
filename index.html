@@ -384,6 +384,85 @@
 
   .capital.visible { opacity: 1; }
 
+  /* Multiple choice options */
+  .mc-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .mc-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    border: 1px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    padding: 14px 12px;
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    text-align: left;
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mc-btn .mc-key {
+    font-size: 0.6rem;
+    opacity: 0.5;
+    font-weight: 700;
+  }
+  .mc-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+  .mc-btn:disabled { cursor: default; }
+  .mc-btn.correct {
+    background: #6fe09a;
+    color: #0a2a18;
+    border-color: #6fe09a;
+  }
+  .mc-btn.wrong {
+    background: #ff6b6b;
+    color: #2a0a0a;
+    border-color: #ff6b6b;
+  }
+  .mc-btn.dim { opacity: 0.4; }
+
+  /* Type input */
+  .type-input {
+    margin-bottom: 20px;
+  }
+  .type-input input {
+    width: 100%;
+    font-family: 'Space Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--ink);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--ink);
+    padding: 10px 2px;
+    outline: none;
+    letter-spacing: 0.02em;
+  }
+  .type-input input::placeholder {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+  }
+  .type-input input.correct { border-bottom-color: #6fe09a; color: #cfffe0; }
+  .type-input input.wrong { border-bottom-color: #ff6b6b; color: #ffd0d0; }
+  .type-feedback {
+    margin-top: 10px;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    min-height: 1.2em;
+    color: var(--muted);
+  }
+  .type-feedback .ans { color: #6fe09a; font-weight: 700; }
+
   .timer-bar-wrap {
     position: absolute;
     bottom: 0; left: 0; right: 0;
@@ -490,16 +569,22 @@
     <span>TX.01</span>
   </div>
 
-  <p class="idle-msg">INIT — reads country name // pauses for recall // reveals + speaks capital. configure below.</p>
+  <p class="idle-msg">INIT — choose a mode: LISTEN (passive audio) // MULTIPLE CHOICE (tap answer) // TYPE (recall + spell). Score tracked in choice + type modes.</p>
 
   <div class="settings">
     <div class="setting-group">
-      <label>PAUSE_SEC =</label>
-      <select id="pauseSec">
-        <option value="3">3s</option>
-        <option value="5" selected>5s</option>
-        <option value="8">8s</option>
-        <option value="10">10s</option>
+      <label>MODE =</label>
+      <select id="modeSelect" onchange="onModeChange()">
+        <option value="listen" selected>LISTEN</option>
+        <option value="choice">MULTIPLE CHOICE</option>
+        <option value="type">TYPE ANSWER</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>DIRECTION =</label>
+      <select id="dirSelect">
+        <option value="forward" selected>COUNTRY → CAPITAL</option>
+        <option value="reverse">CAPITAL → COUNTRY</option>
       </select>
     </div>
     <div class="setting-group">
@@ -515,18 +600,27 @@
       </select>
     </div>
     <div class="setting-group">
+      <label>ORDER =</label>
+      <select id="orderSelect">
+        <option value="alpha" selected>ALPHA A→Z</option>
+        <option value="random">RANDOM</option>
+      </select>
+    </div>
+    <div class="setting-group" id="pauseGroup">
+      <label>PAUSE_SEC =</label>
+      <select id="pauseSec">
+        <option value="3">3s</option>
+        <option value="5" selected>5s</option>
+        <option value="8">8s</option>
+        <option value="10">10s</option>
+      </select>
+    </div>
+    <div class="setting-group">
       <label>VOICE_RATE =</label>
       <select id="rateSelect">
         <option value="0.8">0.8x SLOW</option>
         <option value="1" selected>1.0x NORM</option>
         <option value="1.3">1.3x FAST</option>
-      </select>
-    </div>
-    <div class="setting-group">
-      <label>ORDER =</label>
-      <select id="orderSelect">
-        <option value="alpha" selected>ALPHA A→Z</option>
-        <option value="random">RANDOM</option>
       </select>
     </div>
   </div>
@@ -573,17 +667,29 @@
 <div class="card" id="quizCard" style="display:none">
   <div class="counter">
     <span id="counter">01 / 195</span>
-    <span id="quizRegionLabel">ALL REGIONS</span>
+    <span id="scoreLabel">SCORE 0/0</span>
   </div>
   <div class="country-row">
     <div class="country" id="country">—</div>
     <img class="flag" id="flag" alt="" />
   </div>
   <div class="continent" id="continent"></div>
-  <div class="answer-box">
+
+  <!-- LISTEN mode: reveal box -->
+  <div class="answer-box" id="answerBox">
     <div class="capital" id="capital">—</div>
     <div class="timer-bar-wrap"><div class="timer-bar" id="timerBar"></div></div>
   </div>
+
+  <!-- MULTIPLE CHOICE mode: option buttons -->
+  <div class="mc-options" id="mcOptions" style="display:none"></div>
+
+  <!-- TYPE mode: text input -->
+  <div class="type-input" id="typeInput" style="display:none">
+    <input type="text" id="answerField" placeholder="TYPE ANSWER + ENTER" autocomplete="off" autocapitalize="off" spellcheck="false" />
+    <div class="type-feedback" id="typeFeedback"></div>
+  </div>
+
   <div class="controls">
     <button onclick="prevEntry()" id="btnPrev">← PREV</button>
     <button class="btn-primary" onclick="nextEntry()" id="btnNext">NEXT →</button>
@@ -960,6 +1066,8 @@ function getEntries() {
 function startQuiz() {
   entries = [...getEntries()];
   idx = 0;
+  scoreCorrect = 0;
+  scoreTotal = 0;
   document.getElementById('setupCard').style.display = 'none';
   document.getElementById('quizCard').style.display = 'block';
   startMusic();
@@ -1026,25 +1134,82 @@ function setFlag(country) {
   flagEl.src = `https://flagcdn.com/w160/${code}.png`;
 }
 
+// ── Scoring state ──
+let scoreCorrect = 0;
+let scoreTotal = 0;
+let answeredThis = false; // prevent double-scoring on the current question
+
+function updateScore() {
+  document.getElementById('scoreLabel').textContent = `SCORE ${scoreCorrect}/${scoreTotal}`;
+}
+
+function currentMode() { return document.getElementById('modeSelect').value; }
+function currentDir() { return document.getElementById('dirSelect').value; }
+
+// Returns {prompt, answer, promptIsCountry}
+function promptAnswer(entry) {
+  const [country, capital] = entry;
+  if (currentDir() === 'reverse') {
+    return { prompt: capital, answer: country, promptIsCountry: false };
+  }
+  return { prompt: country, answer: capital, promptIsCountry: true };
+}
+
+// Toggle visibility of pause setting (only relevant for listen mode)
+function onModeChange() {
+  const mode = document.getElementById('modeSelect').value;
+  document.getElementById('pauseGroup').style.opacity = (mode === 'listen') ? '1' : '0.35';
+}
+
 function showEntry() {
   clearTimeout(autoTimer);
   window.speechSynthesis.cancel();
+  answeredThis = false;
 
-  const [country, capital, continent] = entries[idx];
-  const pause = parseInt(document.getElementById('pauseSec').value);
+  const entry = entries[idx];
+  const [country, capital, continent] = entry;
+  const mode = currentMode();
+  const { prompt, answer, promptIsCountry } = promptAnswer(entry);
 
-  document.getElementById('counter').innerHTML = `<span>${String(idx+1).padStart(2,'0')} / ${String(entries.length).padStart(3,'0')}</span><span id="quizRegionLabel">${document.getElementById('regionFilter').options[document.getElementById('regionFilter').selectedIndex].text}</span>`;
-  document.getElementById('country').textContent = country;
+  // Counter + score
+  document.getElementById('counter').innerHTML =
+    `<span>${String(idx+1).padStart(2,'0')} / ${String(entries.length).padStart(3,'0')}</span><span id="scoreLabel">SCORE ${scoreCorrect}/${scoreTotal}</span>`;
+
+  // Prompt (country or capital depending on direction)
+  document.getElementById('country').textContent = prompt;
   document.getElementById('continent').textContent = continent;
-  setFlag(country);
 
-  // Fix flash: remove visible first (fades out), then swap text after transition
-  const capEl = document.getElementById('capital');
-  capEl.classList.remove('visible');
-  setTimeout(() => { capEl.textContent = capital; }, 420);
+  // Flag: only show when the country is the prompt (otherwise it gives the answer away)
+  if (promptIsCountry) setFlag(country);
+  else { const f = document.getElementById('flag'); f.classList.remove('loaded'); f.removeAttribute('src'); }
 
   document.getElementById('btnPrev').disabled = idx === 0;
   document.getElementById('btnNext').disabled = false;
+
+  // Hide all mode panels first
+  document.getElementById('answerBox').style.display = 'none';
+  document.getElementById('mcOptions').style.display = 'none';
+  document.getElementById('typeInput').style.display = 'none';
+
+  if (mode === 'listen') {
+    runListenMode(prompt, answer);
+  } else if (mode === 'choice') {
+    runChoiceMode(entry, prompt, answer, promptIsCountry);
+  } else if (mode === 'type') {
+    runTypeMode(prompt, answer);
+  }
+}
+
+// ── LISTEN MODE (original behaviour) ──
+function runListenMode(prompt, answer) {
+  const pause = parseInt(document.getElementById('pauseSec').value);
+  const box = document.getElementById('answerBox');
+  box.style.display = 'flex';
+
+  const capEl = document.getElementById('capital');
+  capEl.classList.remove('visible');
+  setTimeout(() => { capEl.textContent = answer; }, 420);
+
   document.getElementById('statusBar').textContent = `RECALL // ${pause}s`;
 
   const bar = document.getElementById('timerBar');
@@ -1057,32 +1222,188 @@ function showEntry() {
     });
   });
 
-  speak(country, () => {
-    autoTimer = setTimeout(() => revealCapital(capital), pause * 1000);
+  speak(prompt, () => {
+    autoTimer = setTimeout(() => revealCapital(answer), pause * 1000);
   });
 }
 
-function revealCapital(capital) {
+function revealCapital(answer) {
   document.getElementById('capital').classList.add('visible');
   document.getElementById('statusBar').textContent = '';
-  speak(capital, () => {
+  speak(answer, () => {
     autoTimer = setTimeout(() => {
-      if (idx < entries.length - 1) {
-        idx++;
-        showEntry();
-      } else {
-        document.getElementById('statusBar').textContent = '[ COMPLETE ] ALL ENTRIES DONE';
-        document.getElementById('btnNext').disabled = true;
-      }
+      if (idx < entries.length - 1) { idx++; showEntry(); }
+      else finishQuiz();
     }, 2000);
   });
 }
 
+// ── MULTIPLE CHOICE MODE ──
+function runChoiceMode(entry, prompt, answer, promptIsCountry) {
+  const container = document.getElementById('mcOptions');
+  container.style.display = 'grid';
+  container.innerHTML = '';
+  document.getElementById('statusBar').textContent = 'SELECT THE CORRECT ANSWER';
+
+  // Build 3 distractors from the same answer-pool (capitals or countries)
+  const answerIdx = promptIsCountry ? 1 : 0;
+  const pool = ALL_CAPITALS.map(e => e[answerIdx]).filter(a => a !== answer);
+  // shuffle pool and take 3
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const options = [answer, pool[0], pool[1], pool[2]];
+  // shuffle options
+  for (let i = options.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [options[i], options[j]] = [options[j], options[i]];
+  }
+
+  const keys = ['A','B','C','D'];
+  options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'mc-btn';
+    btn.innerHTML = `<span class="mc-key">${keys[i]}</span><span>${opt}</span>`;
+    btn.onclick = () => handleChoice(btn, opt, answer, container);
+    container.appendChild(btn);
+  });
+
+  // Speak the prompt
+  speak(prompt);
+}
+
+function handleChoice(btn, chosen, answer, container) {
+  if (answeredThis) return;
+  answeredThis = true;
+  scoreTotal++;
+
+  const allBtns = container.querySelectorAll('.mc-btn');
+  allBtns.forEach(b => {
+    b.disabled = true;
+    const label = b.querySelector('span:last-child').textContent;
+    if (label === answer) b.classList.add('correct');
+    else if (b === btn) b.classList.add('wrong');
+    else b.classList.add('dim');
+  });
+
+  if (chosen === answer) {
+    scoreCorrect++;
+    document.getElementById('statusBar').textContent = '✓ CORRECT';
+    speak(answer);
+  } else {
+    document.getElementById('statusBar').textContent = `✗ ANSWER: ${answer}`;
+    speak(answer);
+  }
+  updateScore();
+  document.getElementById('counter').querySelector('#scoreLabel').textContent = `SCORE ${scoreCorrect}/${scoreTotal}`;
+
+  // Auto-advance after a beat
+  autoTimer = setTimeout(() => {
+    if (idx < entries.length - 1) { idx++; showEntry(); }
+    else finishQuiz();
+  }, 1600);
+}
+
+// ── TYPE MODE ──
+function runTypeMode(prompt, answer) {
+  const wrap = document.getElementById('typeInput');
+  wrap.style.display = 'block';
+  const field = document.getElementById('answerField');
+  const feedback = document.getElementById('typeFeedback');
+  field.value = '';
+  field.className = '';
+  field.disabled = false;
+  feedback.innerHTML = '';
+  document.getElementById('statusBar').textContent = 'TYPE YOUR ANSWER';
+
+  // focus (slight delay for mobile)
+  setTimeout(() => field.focus(), 100);
+
+  field.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      checkTyped(field, answer, feedback);
+    }
+  };
+
+  speak(prompt);
+}
+
+// Normalise for fuzzy matching: lowercase, strip accents, punctuation, "saint"/"st"
+function normalise(s) {
+  return s.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+    .replace(/\bst\b\.?/g, 'saint')
+    .replace(/[^a-z0-9]/g, ''); // strip spaces & punctuation
+}
+
+// Levenshtein distance for near-miss tolerance
+function editDistance(a, b) {
+  const m = a.length, n = b.length;
+  const dp = Array.from({length: m+1}, () => new Array(n+1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = Math.min(
+        dp[i-1][j] + 1,
+        dp[i][j-1] + 1,
+        dp[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1)
+      );
+  return dp[m][n];
+}
+
+function checkTyped(field, answer, feedback) {
+  if (answeredThis) {
+    // Already answered — Enter again advances
+    if (idx < entries.length - 1) { idx++; showEntry(); }
+    else finishQuiz();
+    return;
+  }
+  answeredThis = true;
+  scoreTotal++;
+  field.disabled = true;
+
+  const got = normalise(field.value);
+  const want = normalise(answer);
+  const dist = editDistance(got, want);
+  // Allow 1 typo for short answers, 2 for longer ones
+  const tolerance = want.length > 8 ? 2 : 1;
+  const correct = got.length > 0 && dist <= tolerance;
+
+  if (correct) {
+    scoreCorrect++;
+    field.classList.add('correct');
+    feedback.innerHTML = dist === 0
+      ? '✓ CORRECT'
+      : `✓ CORRECT <span style="opacity:0.6">(answer: ${answer})</span>`;
+  } else {
+    field.classList.add('wrong');
+    feedback.innerHTML = `✗ ANSWER: <span class="ans">${answer}</span>`;
+  }
+  updateScore();
+  speak(answer);
+  document.getElementById('statusBar').textContent = 'ENTER → NEXT';
+}
+
+function finishQuiz() {
+  const pct = scoreTotal > 0 ? Math.round(100 * scoreCorrect / scoreTotal) : 0;
+  document.getElementById('statusBar').textContent =
+    scoreTotal > 0
+      ? `[ COMPLETE ] SCORE ${scoreCorrect}/${scoreTotal} = ${pct}%`
+      : '[ COMPLETE ] ALL ENTRIES DONE';
+  document.getElementById('btnNext').disabled = true;
+}
+
 function nextEntry() {
+  clearTimeout(autoTimer);
   if (idx < entries.length - 1) { idx++; showEntry(); }
+  else finishQuiz();
 }
 
 function prevEntry() {
+  clearTimeout(autoTimer);
   if (idx > 0) { idx--; showEntry(); }
 }
 
@@ -1179,6 +1500,25 @@ document.getElementById('musicToggle').addEventListener('change', function() {
 
 document.addEventListener('keydown', e => {
   if (document.getElementById('quizCard').style.display === 'none') return;
+
+  // Don't hijack typing in the answer field
+  if (e.target && e.target.id === 'answerField') {
+    if (e.key === 'Escape') { e.target.blur(); stopQuiz(); }
+    return;
+  }
+
+  const mode = currentMode();
+
+  // Multiple choice: A-D or 1-4 selects an option
+  if (mode === 'choice' && !answeredThis) {
+    const map = { a:0, b:1, c:2, d:3, '1':0, '2':1, '3':2, '4':3 };
+    const k = e.key.toLowerCase();
+    if (k in map) {
+      const btns = document.querySelectorAll('#mcOptions .mc-btn');
+      if (btns[map[k]]) { e.preventDefault(); btns[map[k]].click(); return; }
+    }
+  }
+
   if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextEntry(); }
   if (e.key === 'ArrowLeft') { e.preventDefault(); prevEntry(); }
   if (e.key === 'Escape') stopQuiz();
