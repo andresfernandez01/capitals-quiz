@@ -1025,22 +1025,35 @@ const ALL_CAPITALS = [
   ["Yemen","Sana'a","Asia"],
   ["Zambia","Lusaka","Africa"],
   ["Zimbabwe","Harare","Africa"],
+  // Football nations not in the UN-195 list, included for the World Cup category
+  ["England","London","Europe"],
+  ["Scotland","Edinburgh","Europe"],
+  ["Ivory Coast","Yamoussoukro","Africa"],
+  ["Curaçao","Willemstad","Americas"],
 ];
 
 let entries = [];
 let idx = 0;
 let autoTimer = null;
 
-// FIFA World Cup 2026 qualified nations (48 teams)
+// FIFA World Cup 2026 — all 48 confirmed qualified nations
+// (names matched to this app's capitals data spelling)
 const WORLD_CUP_2026 = new Set([
-  "Argentina","Australia","Brazil","Canada","Colombia","Ecuador","Germany",
-  "Japan","Mexico","Morocco","Netherlands","Portugal","Saudi Arabia",
-  "Senegal","South Korea","Spain","Switzerland","United States","Uruguay",
-  "France","England","Belgium","Croatia","Denmark","Serbia","Poland",
-  "Austria","Hungary","Czech Republic","Slovakia","Slovenia","Albania",
-  "Turkey","Ukraine","Georgia","New Zealand","Iran","Iraq","Kuwait",
-  "Qatar","Uzbekistan","Guatemala","Honduras","Panama","Costa Rica",
-  "Venezuela","Paraguay","Chile","Cameroon","Egypt"
+  // Hosts
+  "United States","Mexico","Canada",
+  // AFC
+  "Japan","Iran","South Korea","Australia","Saudi Arabia","Qatar","Uzbekistan","Jordan","Iraq",
+  // CONMEBOL
+  "Argentina","Brazil","Uruguay","Colombia","Ecuador","Paraguay",
+  // OFC
+  "New Zealand",
+  // CAF
+  "Morocco","Senegal","Egypt","Algeria","Tunisia","South Africa","Ivory Coast","Ghana","Cabo Verde","Congo (DRC)",
+  // UEFA
+  "England","France","Spain","Germany","Portugal","Netherlands","Belgium","Croatia","Switzerland",
+  "Austria","Scotland","Norway","Bosnia and Herzegovina","Sweden","Turkey","Czech Republic",
+  // CONCACAF
+  "Panama","Curaçao","Haiti"
 ]);
 
 function getEntries() {
@@ -1120,7 +1133,8 @@ const ISO = {
   "Turkey":"tr","Turkmenistan":"tm","Tuvalu":"tv","Uganda":"ug","Ukraine":"ua",
   "United Arab Emirates":"ae","United Kingdom":"gb","United States":"us","Uruguay":"uy",
   "Uzbekistan":"uz","Vanuatu":"vu","Vatican City":"va","Venezuela":"ve","Vietnam":"vn",
-  "Yemen":"ye","Zambia":"zm","Zimbabwe":"zw"
+  "Yemen":"ye","Zambia":"zm","Zimbabwe":"zw",
+  "England":"gb-eng","Scotland":"gb-sct","Ivory Coast":"ci","Curaçao":"cw"
 };
 
 function setFlag(country) {
@@ -1171,9 +1185,10 @@ function showEntry() {
   const mode = currentMode();
   const { prompt, answer, promptIsCountry } = promptAnswer(entry);
 
-  // Counter + score
-  document.getElementById('counter').innerHTML =
-    `<span>${String(idx+1).padStart(2,'0')} / ${String(entries.length).padStart(3,'0')}</span><span id="scoreLabel">SCORE ${scoreCorrect}/${scoreTotal}</span>`;
+  // Counter + score (two separate stable elements, no innerHTML rebuild)
+  document.getElementById('counter').textContent =
+    `${String(idx+1).padStart(2,'0')} / ${String(entries.length).padStart(3,'0')}`;
+  document.getElementById('scoreLabel').textContent = `SCORE ${scoreCorrect}/${scoreTotal}`;
 
   // Prompt (country or capital depending on direction)
   document.getElementById('country').textContent = prompt;
@@ -1296,7 +1311,6 @@ function handleChoice(btn, chosen, answer, container) {
     speak(answer);
   }
   updateScore();
-  document.getElementById('counter').querySelector('#scoreLabel').textContent = `SCORE ${scoreCorrect}/${scoreTotal}`;
 
   // Auto-advance after a beat
   autoTimer = setTimeout(() => {
@@ -1566,12 +1580,121 @@ document.addEventListener('keydown', e => {
     canvas.height = 340;
   }
 
-  function draw() {
+  // ── Football (truncated icosahedron) geometry ──
+  // Build vertices of a truncated icosahedron, then derive faces (12 pentagons + 20 hexagons).
+  const BALL = buildTruncatedIcosahedron();
+
+  function buildTruncatedIcosahedron() {
+    const phi = (1 + Math.sqrt(5)) / 2;
+    // 60 vertices via even permutations (standard construction)
+    const raw = [];
+    const perms3 = (a, b, c) => [[a,b,c]];
+    // (0, ±1, ±3φ) and even permutations
+    const addAllPerms = (x, y, z) => {
+      const base = [
+        [x,y,z],[y,z,x],[z,x,y] // even (cyclic) permutations
+      ];
+      for (const [a,b,c] of base) raw.push([a,b,c]);
+    };
+    const signs2 = (f) => {
+      for (const s1 of [1,-1]) for (const s2 of [1,-1]) f(s1, s2);
+    };
+    const signs3 = (f) => {
+      for (const s1 of [1,-1]) for (const s2 of [1,-1]) for (const s3 of [1,-1]) f(s1,s2,s3);
+    };
+
+    // Group 1: (0, ±1, ±3φ)
+    signs2((s2,s3) => addAllPerms(0, s2*1, s3*3*phi));
+    // Group 2: (±1, ±(2+φ), ±2φ)
+    signs3((s1,s2,s3) => addAllPerms(s1*1, s2*(2+phi), s3*2*phi));
+    // Group 3: (±φ, ±2, ±(2φ+1))
+    signs3((s1,s2,s3) => addAllPerms(s1*phi, s2*2, s3*(2*phi+1)));
+
+    // Dedupe vertices
+    const verts = [];
+    const key = v => v.map(n => n.toFixed(4)).join(',');
+    const seen = new Set();
+    for (const v of raw) {
+      const k = key(v);
+      if (!seen.has(k)) { seen.add(k); verts.push(v); }
+    }
+    // Normalise to unit sphere
+    for (const v of verts) {
+      const len = Math.hypot(v[0], v[1], v[2]);
+      v[0]/=len; v[1]/=len; v[2]/=len;
+    }
+
+    // Build edges: connect vertices that are nearest-neighbour distance apart
+    // On a truncated icosahedron (unit sphere) edge length is uniform.
+    let minD = Infinity;
+    for (let i = 0; i < verts.length; i++) {
+      for (let j = i+1; j < verts.length; j++) {
+        const d = dist(verts[i], verts[j]);
+        if (d < minD) minD = d;
+      }
+    }
+    const edges = [];
+    const tol = minD * 1.08;
+    for (let i = 0; i < verts.length; i++) {
+      for (let j = i+1; j < verts.length; j++) {
+        if (dist(verts[i], verts[j]) <= tol) edges.push([i, j]);
+      }
+    }
+    return { verts, edges };
+  }
+
+  function dist(a, b) {
+    return Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2]);
+  }
+
+  // Rotate a 3D point around Y axis (spin) then apply slight X tilt
+  function rotatePoint(v, rot) {
+    const cosR = Math.cos(rot), sinR = Math.sin(rot);
+    // spin around Y
+    let x = v[0]*cosR + v[2]*sinR;
+    let z = -v[0]*sinR + v[2]*cosR;
+    let y = v[1];
+    // tilt around X
+    const cosT = Math.cos(TILT), sinT = Math.sin(TILT);
+    const y2 = y*cosT - z*sinT;
+    const z2 = y*sinT + z*cosT;
+    return { x, y: y2, z: z2 };
+  }
+
+  function drawFootball() {
     const W = canvas.width, H = canvas.height;
     const cx = W / 2, cy = H / 2;
     const R = W * RADIUS_FRACTION;
 
-    ctx.clearRect(0, 0, W, H);
+    // Outer circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = W * 0.004;
+    ctx.stroke();
+
+    // Project all vertices
+    const proj = BALL.verts.map(v => rotatePoint(v, rotation));
+
+    // Draw edges (only those with both endpoints reasonably front-facing get full opacity)
+    ctx.lineWidth = W * 0.0028;
+    for (const [i, j] of BALL.edges) {
+      const a = proj[i], b = proj[j];
+      const frontness = (a.z + b.z) / 2; // -1 back, +1 front
+      // Fade back edges for depth
+      const alpha = frontness > 0 ? 0.95 : 0.18 + 0.3 * (frontness + 1) / 1;
+      ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, alpha)})`;
+      ctx.beginPath();
+      ctx.moveTo(cx + a.x * R, cy - a.y * R);
+      ctx.lineTo(cx + b.x * R, cy - b.y * R);
+      ctx.stroke();
+    }
+  }
+
+  function drawGlobe() {
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2;
+    const R = W * RADIUS_FRACTION;
 
     // Draw latitude lines
     const latLines = [-75,-60,-45,-30,-15,0,15,30,45,60,75];
@@ -1630,6 +1753,16 @@ document.addEventListener('keydown', e => {
         else ctx.lineTo(px, py);
       }
       ctx.stroke();
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const region = document.getElementById('regionFilter');
+    if (region && region.value === 'WorldCup') {
+      drawFootball();
+    } else {
+      drawGlobe();
     }
   }
 
