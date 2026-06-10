@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0d1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Capitals">
+<title>Capital Cities</title>
+<link rel="manifest" id="manifestLink">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Space+Mono&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --amber: #d29922;
+    --red: #f85149;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 480px;
+    padding: 40px 36px;
+    text-align: center;
+  }
+
+  .counter {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 28px;
+  }
+
+  .country {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+    min-height: 2.6rem;
+  }
+
+  .continent {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 32px;
+    min-height: 1rem;
+  }
+
+  .answer-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 28px;
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .capital {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .capital.visible { opacity: 1; }
+
+  .timer-bar-wrap {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 0 0 8px 8px;
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  .timer-bar {
+    height: 100%;
+    background: var(--accent);
+    width: 100%;
+    transition: width linear;
+  }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  button {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.35; cursor: default; }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0d1117;
+  }
+
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .btn-start {
+    background: var(--green);
+    color: #0d1117;
+    font-size: 1rem;
+    padding: 14px 36px;
+  }
+
+  .settings {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .setting-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .setting-group label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .setting-group select {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+
+  .status-bar {
+    margin-top: 20px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    min-height: 1.2em;
+  }
+
+  .idle-msg {
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+
+  /* PWA & Wake Lock section */
+  .extra-settings {
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .toggle-label {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .toggle-label span:first-child {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .toggle-label span:last-child {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  /* Toggle switch */
+  .toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    left: 3px; top: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+    background: #0d1117;
+  }
+
+  .toggle input:disabled + .toggle-slider { opacity: 0.4; cursor: not-allowed; }
+
+  /* Install button */
+  .btn-install {
+    background: var(--amber);
+    color: #0d1117;
+    width: 100%;
+    padding: 10px;
+    margin-top: 4px;
+    display: none;
+  }
+
+  /* Wake lock indicator in quiz */
+  .wl-badge {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: var(--green);
+    color: #0d1117;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-left: 6px;
+    vertical-align: middle;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .wl-badge.on { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>World Capitals <span class="wl-badge" id="wlBadge">SCREEN ON</span></h1>
+
+<div class="card" id="setupCard">
+  <p class="idle-msg">Press Start — the app reads each country, pauses so you can think, then reveals and speaks the capital.</p>
+
+  <div class="settings">
+    <div class="setting-group">
+      <label>Pause (seconds)</label>
+      <select id="pauseSec">
+        <option value="3">3s</option>
+        <option value="5" selected>5s</option>
+        <option value="8">8s</option>
+        <option value="10">10s</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>Region</label>
+      <select id="regionFilter">
+        <option value="all">All</option>
+        <option value="Africa">Africa</option>
+        <option value="Americas">Americas</option>
+        <option value="Asia">Asia</option>
+        <option value="Europe">Europe</option>
+        <option value="Oceania">Oceania</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <label>Voice speed</label>
+      <select id="rateSelect">
+        <option value="0.8">Slow</option>
+        <option value="1" selected>Normal</option>
+        <option value="1.3">Fast</option>
+      </select>
+    </div>
+  </div>
+
+  <button class="btn-start" onclick="startQuiz()">▶ Start</button>
+
+  <div class="extra-settings">
+
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <span>Keep screen on</span>
+        <span id="wlDesc">Prevents screen timeout while playing (Android Chrome)</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="wlToggle" onchange="toggleWakeLock()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <span>Install as app</span>
+        <span>Add to home screen for better background audio</span>
+      </div>
+      <button class="btn-install" id="btnInstall" onclick="installPWA()">Install</button>
+      <span id="installStatus" style="font-size:0.75rem;color:var(--muted)">Loading…</span>
+    </div>
+
+  </div>
+</div>
+
+<div class="card" id="quizCard" style="display:none">
+  <div class="counter" id="counter">1 / 195</div>
+  <div class="country" id="country">—</div>
+  <div class="continent" id="continent"></div>
+  <div class="answer-box">
+    <div class="capital" id="capital">—</div>
+    <div class="timer-bar-wrap"><div class="timer-bar" id="timerBar"></div></div>
+  </div>
+  <div class="controls">
+    <button class="btn-secondary" onclick="prevEntry()" id="btnPrev">← Prev</button>
+    <button class="btn-primary" onclick="nextEntry()" id="btnNext">Next →</button>
+    <button class="btn-secondary" onclick="stopQuiz()">✕ Stop</button>
+  </div>
+  <div class="status-bar" id="statusBar">Starting...</div>
+</div>
+
+<script>
+// ── PWA manifest (injected inline as blob so single-file works) ──────────────
+const MANIFEST = {
+  name: "World Capitals",
+  short_name: "Capitals",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#0d1117",
+  theme_color: "#0d1117",
+  description: "Learn world capital cities with spoken audio",
+  icons: [
+    { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%230d1117'/%3E%3Ctext x='96' y='130' font-size='110' text-anchor='middle' fill='%2358a6ff'%3E%F0%9F%8C%8D%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" },
+    { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%230d1117'/%3E%3Ctext x='256' y='360' font-size='300' text-anchor='middle' fill='%2358a6ff'%3E%F0%9F%8C%8D%3C/text%3E%3C/svg%3E", sizes: "512x512", type: "image/svg+xml" }
+  ]
+};
+const blob = new Blob([JSON.stringify(MANIFEST)], {type:'application/json'});
+document.getElementById('manifestLink').href = URL.createObjectURL(blob);
+
+// ── Service Worker (for PWA installability) ──────────────────────────────────
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    self.addEventListener('install', e => self.skipWaiting());
+    self.addEventListener('activate', e => e.waitUntil(clients.claim()));
+    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => new Response('Offline'))));
+  `;
+  const swBlob = new Blob([swCode], {type:'text/javascript'});
+  const swURL = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swURL).catch(() => {});
+}
+
+// ── Install prompt ────────────────────────────────────────────────────────────
+let deferredPrompt = null;
+const btnInstall = document.getElementById('btnInstall');
+const installStatus = document.getElementById('installStatus');
+
+function updateInstallUI() {
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+
+  if (isStandalone) {
+    installStatus.textContent = '✓ Running as app';
+    btnInstall.style.display = 'none';
+  } else if (deferredPrompt) {
+    installStatus.style.display = 'none';
+    btnInstall.style.display = 'block';
+  } else {
+    // iOS Safari: no beforeinstallprompt — show manual instructions
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    if (isIOS) {
+      installStatus.innerHTML = 'Tap <strong>Share</strong> then <em>Add to Home Screen</em>';
+    } else {
+      installStatus.textContent = 'Use browser menu → "Add to Home Screen"';
+    }
+    btnInstall.style.display = 'none';
+  }
+}
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  updateInstallUI();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null;
+  updateInstallUI();
+});
+
+updateInstallUI();
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => { deferredPrompt = null; updateInstallUI(); });
+}
+
+// ── Wake Lock ─────────────────────────────────────────────────────────────────
+let wakeLock = null;
+const wlToggle = document.getElementById('wlToggle');
+const wlDesc = document.getElementById('wlDesc');
+const wlBadge = document.getElementById('wlBadge');
+
+if (!('wakeLock' in navigator)) {
+  wlToggle.disabled = true;
+  wlDesc.textContent = 'Not supported in this browser';
+}
+
+async function toggleWakeLock() {
+  if (wlToggle.checked) {
+    await requestWakeLock();
+  } else {
+    await releaseWakeLock();
+  }
+}
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wlBadge.classList.add('on');
+    wlDesc.textContent = 'Screen will stay on while this tab is active';
+    wakeLock.addEventListener('release', () => {
+      wlBadge.classList.remove('on');
+      wlDesc.textContent = 'Screen lock was released (tab hidden or browser paused)';
+      wlToggle.checked = false;
+    });
+  } catch (err) {
+    wlToggle.checked = false;
+    wlDesc.textContent = 'Could not acquire wake lock: ' + err.message;
+  }
+}
+
+async function releaseWakeLock() {
+  if (wakeLock) {
+    await wakeLock.release();
+    wakeLock = null;
+  }
+  wlBadge.classList.remove('on');
+  wlDesc.textContent = 'Prevents screen timeout while playing (Android Chrome)';
+}
+
+// Re-acquire wake lock when tab becomes visible again
+document.addEventListener('visibilitychange', async () => {
+  if (wlToggle.checked && document.visibilityState === 'visible') {
+    await requestWakeLock();
+  }
+});
+
+// ── Quiz data ─────────────────────────────────────────────────────────────────
+const ALL_CAPITALS = [
+  ["Afghanistan","Kabul","Asia"],
+  ["Albania","Tirana","Europe"],
+  ["Algeria","Algiers","Africa"],
+  ["Andorra","Andorra la Vella","Europe"],
+  ["Angola","Luanda","Africa"],
+  ["Antigua and Barbuda","Saint John's","Americas"],
+  ["Argentina","Buenos Aires","Americas"],
+  ["Armenia","Yerevan","Asia"],
+  ["Australia","Canberra","Oceania"],
+  ["Austria","Vienna","Europe"],
+  ["Azerbaijan","Baku","Asia"],
+  ["Bahamas","Nassau","Americas"],
+  ["Bahrain","Manama","Asia"],
+  ["Bangladesh","Dhaka","Asia"],
+  ["Barbados","Bridgetown","Americas"],
+  ["Belarus","Minsk","Europe"],
+  ["Belgium","Brussels","Europe"],
+  ["Belize","Belmopan","Americas"],
+  ["Benin","Porto-Novo","Africa"],
+  ["Bhutan","Thimphu","Asia"],
+  ["Bolivia","Sucre","Americas"],
+  ["Bosnia and Herzegovina","Sarajevo","Europe"],
+  ["Botswana","Gaborone","Africa"],
+  ["Brazil","Brasília","Americas"],
+  ["Brunei","Bandar Seri Begawan","Asia"],
+  ["Bulgaria","Sofia","Europe"],
+  ["Burkina Faso","Ouagadougou","Africa"],
+  ["Burundi","Gitega","Africa"],
+  ["Cabo Verde","Praia","Africa"],
+  ["Cambodia","Phnom Penh","Asia"],
+  ["Cameroon","Yaoundé","Africa"],
+  ["Canada","Ottawa","Americas"],
+  ["Central African Republic","Bangui","Africa"],
+  ["Chad","N'Djamena","Africa"],
+  ["Chile","Santiago","Americas"],
+  ["China","Beijing","Asia"],
+  ["Colombia","Bogotá","Americas"],
+  ["Comoros","Moroni","Africa"],
+  ["Congo (Brazzaville)","Brazzaville","Africa"],
+  ["Congo (DRC)","Kinshasa","Africa"],
+  ["Costa Rica","San José","Americas"],
+  ["Croatia","Zagreb","Europe"],
+  ["Cuba","Havana","Americas"],
+  ["Cyprus","Nicosia","Europe"],
+  ["Czech Republic","Prague","Europe"],
+  ["Denmark","Copenhagen","Europe"],
+  ["Djibouti","Djibouti City","Africa"],
+  ["Dominica","Roseau","Americas"],
+  ["Dominican Republic","Santo Domingo","Americas"],
+  ["Ecuador","Quito","Americas"],
+  ["Egypt","Cairo","Africa"],
+  ["El Salvador","San Salvador","Americas"],
+  ["Equatorial Guinea","Malabo","Africa"],
+  ["Eritrea","Asmara","Africa"],
+  ["Estonia","Tallinn","Europe"],
+  ["Eswatini","Mbabane","Africa"],
+  ["Ethiopia","Addis Ababa","Africa"],
+  ["Fiji","Suva","Oceania"],
+  ["Finland","Helsinki","Europe"],
+  ["France","Paris","Europe"],
+  ["Gabon","Libreville","Africa"],
+  ["Gambia","Banjul","Africa"],
+  ["Georgia","Tbilisi","Asia"],
+  ["Germany","Berlin","Europe"],
+  ["Ghana","Accra","Africa"],
+  ["Greece","Athens","Europe"],
+  ["Grenada","Saint George's","Americas"],
+  ["Guatemala","Guatemala City","Americas"],
+  ["Guinea","Conakry","Africa"],
+  ["Guinea-Bissau","Bissau","Africa"],
+  ["Guyana","Georgetown","Americas"],
+  ["Haiti","Port-au-Prince","Americas"],
+  ["Honduras","Tegucigalpa","Americas"],
+  ["Hungary","Budapest","Europe"],
+  ["Iceland","Reykjavík","Europe"],
+  ["India","New Delhi","Asia"],
+  ["Indonesia","Jakarta","Asia"],
+  ["Iran","Tehran","Asia"],
+  ["Iraq","Baghdad","Asia"],
+  ["Ireland","Dublin","Europe"],
+  ["Israel","Jerusalem","Asia"],
+  ["Italy","Rome","Europe"],
+  ["Jamaica","Kingston","Americas"],
+  ["Japan","Tokyo","Asia"],
+  ["Jordan","Amman","Asia"],
+  ["Kazakhstan","Astana","Asia"],
+  ["Kenya","Nairobi","Africa"],
+  ["Kiribati","South Tarawa","Oceania"],
+  ["Kosovo","Pristina","Europe"],
+  ["Kuwait","Kuwait City","Asia"],
+  ["Kyrgyzstan","Bishkek","Asia"],
+  ["Laos","Vientiane","Asia"],
+  ["Latvia","Riga","Europe"],
+  ["Lebanon","Beirut","Asia"],
+  ["Lesotho","Maseru","Africa"],
+  ["Liberia","Monrovia","Africa"],
+  ["Libya","Tripoli","Africa"],
+  ["Liechtenstein","Vaduz","Europe"],
+  ["Lithuania","Vilnius","Europe"],
+  ["Luxembourg","Luxembourg City","Europe"],
+  ["Madagascar","Antananarivo","Africa"],
+  ["Malawi","Lilongwe","Africa"],
+  ["Malaysia","Kuala Lumpur","Asia"],
+  ["Maldives","Malé","Asia"],
+  ["Mali","Bamako","Africa"],
+  ["Malta","Valletta","Europe"],
+  ["Marshall Islands","Majuro","Oceania"],
+  ["Mauritania","Nouakchott","Africa"],
+  ["Mauritius","Port Louis","Africa"],
+  ["Mexico","Mexico City","Americas"],
+  ["Micronesia","Palikir","Oceania"],
+  ["Moldova","Chișinău","Europe"],
+  ["Monaco","Monaco","Europe"],
+  ["Mongolia","Ulaanbaatar","Asia"],
+  ["Montenegro","Podgorica","Europe"],
+  ["Morocco","Rabat","Africa"],
+  ["Mozambique","Maputo","Africa"],
+  ["Myanmar","Naypyidaw","Asia"],
+  ["Namibia","Windhoek","Africa"],
+  ["Nauru","Yaren","Oceania"],
+  ["Nepal","Kathmandu","Asia"],
+  ["Netherlands","Amsterdam","Europe"],
+  ["New Zealand","Wellington","Oceania"],
+  ["Nicaragua","Managua","Americas"],
+  ["Niger","Niamey","Africa"],
+  ["Nigeria","Abuja","Africa"],
+  ["North Korea","Pyongyang","Asia"],
+  ["North Macedonia","Skopje","Europe"],
+  ["Norway","Oslo","Europe"],
+  ["Oman","Muscat","Asia"],
+  ["Pakistan","Islamabad","Asia"],
+  ["Palau","Ngerulmud","Oceania"],
+  ["Palestine","Ramallah","Asia"],
+  ["Panama","Panama City","Americas"],
+  ["Papua New Guinea","Port Moresby","Oceania"],
+  ["Paraguay","Asunción","Americas"],
+  ["Peru","Lima","Americas"],
+  ["Philippines","Manila","Asia"],
+  ["Poland","Warsaw","Europe"],
+  ["Portugal","Lisbon","Europe"],
+  ["Qatar","Doha","Asia"],
+  ["Romania","Bucharest","Europe"],
+  ["Russia","Moscow","Europe"],
+  ["Rwanda","Kigali","Africa"],
+  ["Saint Kitts and Nevis","Basseterre","Americas"],
+  ["Saint Lucia","Castries","Americas"],
+  ["Saint Vincent and the Grenadines","Kingstown","Americas"],
+  ["Samoa","Apia","Oceania"],
+  ["San Marino","San Marino","Europe"],
+  ["São Tomé and Príncipe","São Tomé","Africa"],
+  ["Saudi Arabia","Riyadh","Asia"],
+  ["Senegal","Dakar","Africa"],
+  ["Serbia","Belgrade","Europe"],
+  ["Seychelles","Victoria","Africa"],
+  ["Sierra Leone","Freetown","Africa"],
+  ["Singapore","Singapore","Asia"],
+  ["Slovakia","Bratislava","Europe"],
+  ["Slovenia","Ljubljana","Europe"],
+  ["Solomon Islands","Honiara","Oceania"],
+  ["Somalia","Mogadishu","Africa"],
+  ["South Africa","Pretoria","Africa"],
+  ["South Korea","Seoul","Asia"],
+  ["South Sudan","Juba","Africa"],
+  ["Spain","Madrid","Europe"],
+  ["Sri Lanka","Sri Jayawardenepura Kotte","Asia"],
+  ["Sudan","Khartoum","Africa"],
+  ["Suriname","Paramaribo","Americas"],
+  ["Sweden","Stockholm","Europe"],
+  ["Switzerland","Bern","Europe"],
+  ["Syria","Damascus","Asia"],
+  ["Taiwan","Taipei","Asia"],
+  ["Tajikistan","Dushanbe","Asia"],
+  ["Tanzania","Dodoma","Africa"],
+  ["Thailand","Bangkok","Asia"],
+  ["Timor-Leste","Dili","Asia"],
+  ["Togo","Lomé","Africa"],
+  ["Tonga","Nuku'alofa","Oceania"],
+  ["Trinidad and Tobago","Port of Spain","Americas"],
+  ["Tunisia","Tunis","Africa"],
+  ["Turkey","Ankara","Asia"],
+  ["Turkmenistan","Ashgabat","Asia"],
+  ["Tuvalu","Funafuti","Oceania"],
+  ["Uganda","Kampala","Africa"],
+  ["Ukraine","Kyiv","Europe"],
+  ["United Arab Emirates","Abu Dhabi","Asia"],
+  ["United Kingdom","London","Europe"],
+  ["United States","Washington D.C.","Americas"],
+  ["Uruguay","Montevideo","Americas"],
+  ["Uzbekistan","Tashkent","Asia"],
+  ["Vanuatu","Port Vila","Oceania"],
+  ["Vatican City","Vatican City","Europe"],
+  ["Venezuela","Caracas","Americas"],
+  ["Vietnam","Hanoi","Asia"],
+  ["Yemen","Sana'a","Asia"],
+  ["Zambia","Lusaka","Africa"],
+  ["Zimbabwe","Harare","Africa"],
+];
+
+let entries = [];
+let idx = 0;
+let autoTimer = null;
+
+function getEntries() {
+  const region = document.getElementById('regionFilter').value;
+  return region === 'all' ? ALL_CAPITALS : ALL_CAPITALS.filter(e => e[2] === region);
+}
+
+function startQuiz() {
+  entries = [...getEntries()];
+  idx = 0;
+  document.getElementById('setupCard').style.display = 'none';
+  document.getElementById('quizCard').style.display = 'block';
+  showEntry();
+}
+
+function stopQuiz() {
+  clearTimeout(autoTimer);
+  window.speechSynthesis.cancel();
+  document.getElementById('quizCard').style.display = 'none';
+  document.getElementById('setupCard').style.display = 'block';
+}
+
+function showEntry() {
+  clearTimeout(autoTimer);
+  window.speechSynthesis.cancel();
+
+  const [country, capital, continent] = entries[idx];
+  const pause = parseInt(document.getElementById('pauseSec').value);
+
+  document.getElementById('counter').textContent = `${idx + 1} / ${entries.length}`;
+  document.getElementById('country').textContent = country;
+  document.getElementById('continent').textContent = continent;
+  document.getElementById('capital').textContent = capital;
+  document.getElementById('capital').classList.remove('visible');
+  document.getElementById('btnPrev').disabled = idx === 0;
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('statusBar').textContent = `Thinking time: ${pause}s…`;
+
+  const bar = document.getElementById('timerBar');
+  bar.style.transition = 'none';
+  bar.style.width = '100%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      bar.style.transition = `width ${pause}s linear`;
+      bar.style.width = '0%';
+    });
+  });
+
+  speak(country, () => {
+    autoTimer = setTimeout(() => revealCapital(capital), pause * 1000);
+  });
+}
+
+function revealCapital(capital) {
+  document.getElementById('capital').classList.add('visible');
+  document.getElementById('statusBar').textContent = '';
+  speak(capital, () => {
+    autoTimer = setTimeout(() => {
+      if (idx < entries.length - 1) {
+        idx++;
+        showEntry();
+      } else {
+        document.getElementById('statusBar').textContent = '✓ All done!';
+        document.getElementById('btnNext').disabled = true;
+      }
+    }, 2000);
+  });
+}
+
+function nextEntry() {
+  if (idx < entries.length - 1) { idx++; showEntry(); }
+}
+
+function prevEntry() {
+  if (idx > 0) { idx--; showEntry(); }
+}
+
+function speak(text, onEnd) {
+  window.speechSynthesis.cancel();
+  const rate = parseFloat(document.getElementById('rateSelect').value);
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = rate;
+  u.lang = 'en-GB';
+  if (onEnd) u.onend = onEnd;
+  window.speechSynthesis.speak(u);
+}
+
+document.addEventListener('keydown', e => {
+  if (document.getElementById('quizCard').style.display === 'none') return;
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextEntry(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevEntry(); }
+  if (e.key === 'Escape') stopQuiz();
+});
+</script>
+</body>
+</html>
