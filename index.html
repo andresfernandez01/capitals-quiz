@@ -176,7 +176,7 @@
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%230f0f0f'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23ffffff'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 2px center;
     padding-right: 14px;
@@ -318,6 +318,29 @@
     line-height: 1.1;
   }
 
+  .country-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .country-row .country {
+    margin-bottom: 4px;
+  }
+
+  .flag {
+    flex-shrink: 0;
+    width: 54px;
+    height: 36px;
+    border: 1px solid rgba(255,255,255,0.7);
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    background: rgba(255,255,255,0.08);
+  }
+  .flag.loaded { opacity: 1; }
+
   .continent {
     font-size: 0.55rem;
     color: var(--muted);
@@ -418,9 +441,37 @@
     min-height: 1em;
     text-transform: uppercase;
   }
+  /* Globe canvas */
+  #globeCanvas {
+    position: fixed;
+    bottom: -60px;
+    left: -60px;
+    width: 340px;
+    height: 340px;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Flight paths canvas - full screen behind UI */
+  #flightCanvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    opacity: 0.2;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body > * { position: relative; z-index: 1; }
+
 </style>
 </head>
 <body>
+
+<canvas id="globeCanvas"></canvas>
+<canvas id="flightCanvas"></canvas>
 
 <div class="masthead">
   <div class="masthead-left">
@@ -524,7 +575,10 @@
     <span id="counter">01 / 195</span>
     <span id="quizRegionLabel">ALL REGIONS</span>
   </div>
-  <div class="country" id="country">—</div>
+  <div class="country-row">
+    <div class="country" id="country">—</div>
+    <img class="flag" id="flag" alt="" />
+  </div>
   <div class="continent" id="continent"></div>
   <div class="answer-box">
     <div class="capital" id="capital">—</div>
@@ -561,7 +615,12 @@ if ('serviceWorker' in navigator) {
   const swCode = `
     self.addEventListener('install', e => self.skipWaiting());
     self.addEventListener('activate', e => e.waitUntil(clients.claim()));
-    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => new Response('Offline'))));
+    self.addEventListener('fetch', e => {
+      // Only handle same-origin requests; let cross-origin (flag CDN, fonts) pass through
+      const url = new URL(e.request.url);
+      if (url.origin !== self.location.origin) return;
+      e.respondWith(fetch(e.request).catch(() => new Response('Offline')));
+    });
   `;
   const swBlob = new Blob([swCode], {type:'text/javascript'});
   const swURL = URL.createObjectURL(swBlob);
@@ -915,6 +974,58 @@ function stopQuiz() {
   document.getElementById('setupCard').style.display = 'block';
 }
 
+// Country name → ISO 3166-1 alpha-2 code (lowercase, for flagcdn.com)
+const ISO = {
+  "Afghanistan":"af","Albania":"al","Algeria":"dz","Andorra":"ad","Angola":"ao",
+  "Antigua and Barbuda":"ag","Argentina":"ar","Armenia":"am","Australia":"au","Austria":"at",
+  "Azerbaijan":"az","Bahamas":"bs","Bahrain":"bh","Bangladesh":"bd","Barbados":"bb",
+  "Belarus":"by","Belgium":"be","Belize":"bz","Benin":"bj","Bhutan":"bt","Bolivia":"bo",
+  "Bosnia and Herzegovina":"ba","Botswana":"bw","Brazil":"br","Brunei":"bn","Bulgaria":"bg",
+  "Burkina Faso":"bf","Burundi":"bi","Cabo Verde":"cv","Cambodia":"kh","Cameroon":"cm",
+  "Canada":"ca","Central African Republic":"cf","Chad":"td","Chile":"cl","China":"cn",
+  "Colombia":"co","Comoros":"km","Congo (Brazzaville)":"cg","Congo (DRC)":"cd","Costa Rica":"cr",
+  "Croatia":"hr","Cuba":"cu","Cyprus":"cy","Czech Republic":"cz","Denmark":"dk","Djibouti":"dj",
+  "Dominica":"dm","Dominican Republic":"do","Ecuador":"ec","Egypt":"eg","El Salvador":"sv",
+  "Equatorial Guinea":"gq","Eritrea":"er","Estonia":"ee","Eswatini":"sz","Ethiopia":"et",
+  "Fiji":"fj","Finland":"fi","France":"fr","Gabon":"ga","Gambia":"gm","Georgia":"ge",
+  "Germany":"de","Ghana":"gh","Greece":"gr","Grenada":"gd","Guatemala":"gt","Guinea":"gn",
+  "Guinea-Bissau":"gw","Guyana":"gy","Haiti":"ht","Honduras":"hn","Hungary":"hu","Iceland":"is",
+  "India":"in","Indonesia":"id","Iran":"ir","Iraq":"iq","Ireland":"ie","Israel":"il","Italy":"it",
+  "Jamaica":"jm","Japan":"jp","Jordan":"jo","Kazakhstan":"kz","Kenya":"ke","Kiribati":"ki",
+  "Kosovo":"xk","Kuwait":"kw","Kyrgyzstan":"kg","Laos":"la","Latvia":"lv","Lebanon":"lb",
+  "Lesotho":"ls","Liberia":"lr","Libya":"ly","Liechtenstein":"li","Lithuania":"lt","Luxembourg":"lu",
+  "Madagascar":"mg","Malawi":"mw","Malaysia":"my","Maldives":"mv","Mali":"ml","Malta":"mt",
+  "Marshall Islands":"mh","Mauritania":"mr","Mauritius":"mu","Mexico":"mx","Micronesia":"fm",
+  "Moldova":"md","Monaco":"mc","Mongolia":"mn","Montenegro":"me","Morocco":"ma","Mozambique":"mz",
+  "Myanmar":"mm","Namibia":"na","Nauru":"nr","Nepal":"np","Netherlands":"nl","New Zealand":"nz",
+  "Nicaragua":"ni","Niger":"ne","Nigeria":"ng","North Korea":"kp","North Macedonia":"mk",
+  "Norway":"no","Oman":"om","Pakistan":"pk","Palau":"pw","Palestine":"ps","Panama":"pa",
+  "Papua New Guinea":"pg","Paraguay":"py","Peru":"pe","Philippines":"ph","Poland":"pl",
+  "Portugal":"pt","Qatar":"qa","Romania":"ro","Russia":"ru","Rwanda":"rw",
+  "Saint Kitts and Nevis":"kn","Saint Lucia":"lc","Saint Vincent and the Grenadines":"vc",
+  "Samoa":"ws","San Marino":"sm","São Tomé and Príncipe":"st","Saudi Arabia":"sa","Senegal":"sn",
+  "Serbia":"rs","Seychelles":"sc","Sierra Leone":"sl","Singapore":"sg","Slovakia":"sk",
+  "Slovenia":"si","Solomon Islands":"sb","Somalia":"so","South Africa":"za","South Korea":"kr",
+  "South Sudan":"ss","Spain":"es","Sri Lanka":"lk","Sudan":"sd","Suriname":"sr","Sweden":"se",
+  "Switzerland":"ch","Syria":"sy","Taiwan":"tw","Tajikistan":"tj","Tanzania":"tz","Thailand":"th",
+  "Timor-Leste":"tl","Togo":"tg","Tonga":"to","Trinidad and Tobago":"tt","Tunisia":"tn",
+  "Turkey":"tr","Turkmenistan":"tm","Tuvalu":"tv","Uganda":"ug","Ukraine":"ua",
+  "United Arab Emirates":"ae","United Kingdom":"gb","United States":"us","Uruguay":"uy",
+  "Uzbekistan":"uz","Vanuatu":"vu","Vatican City":"va","Venezuela":"ve","Vietnam":"vn",
+  "Yemen":"ye","Zambia":"zm","Zimbabwe":"zw"
+};
+
+function setFlag(country) {
+  const flagEl = document.getElementById('flag');
+  const code = ISO[country];
+  flagEl.classList.remove('loaded');
+  if (!code) { flagEl.removeAttribute('src'); return; }
+  flagEl.onload = () => flagEl.classList.add('loaded');
+  flagEl.onerror = () => flagEl.classList.remove('loaded');
+  // flagcdn w160 PNG — crisp at our 54px display size
+  flagEl.src = `https://flagcdn.com/w160/${code}.png`;
+}
+
 function showEntry() {
   clearTimeout(autoTimer);
   window.speechSynthesis.cancel();
@@ -925,6 +1036,7 @@ function showEntry() {
   document.getElementById('counter').innerHTML = `<span>${String(idx+1).padStart(2,'0')} / ${String(entries.length).padStart(3,'0')}</span><span id="quizRegionLabel">${document.getElementById('regionFilter').options[document.getElementById('regionFilter').selectedIndex].text}</span>`;
   document.getElementById('country').textContent = country;
   document.getElementById('continent').textContent = continent;
+  setFlag(country);
 
   // Fix flash: remove visible first (fades out), then swap text after transition
   const capEl = document.getElementById('capital');
@@ -1071,6 +1183,278 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') { e.preventDefault(); prevEntry(); }
   if (e.key === 'Escape') stopQuiz();
 });
+
+// ── Spinning Wireframe Globe ──────────────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('globeCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // Simplified continent outlines as lat/lon polylines [lat, lon] in degrees
+  // Each array is one polygon
+  const CONTINENTS = [
+    // North America
+    [[70,-140],[72,-120],[68,-100],[72,-80],[65,-65],[55,-60],[47,-53],[44,-66],[42,-70],[35,-75],[25,-80],[20,-87],[15,-85],[9,-79],[9,-77],[7,-77],[4,-77],[4,-74],[10,-75],[12,-72],[12,-68],[15,-62],[18,-66],[18,-72],[22,-80],[25,-82],[28,-82],[30,-88],[30,-95],[26,-97],[22,-98],[20,-87],[16,-93],[14,-93],[14,-90],[16,-90],[17,-92],[20,-90],[21,-87],[22,-87],[24,-107],[26,-110],[28,-114],[32,-117],[34,-120],[38,-123],[45,-124],[50,-127],[54,-130],[58,-137],[60,-141],[70,-141],[70,-140]],
+    // South America
+    [[-3,-80],[-5,-81],[-8,-80],[-12,-77],[-16,-75],[-18,-70],[-22,-68],[-27,-70],[-33,-71],[-38,-72],[-42,-73],[-46,-75],[-50,-75],[-53,-70],[-55,-65],[-54,-65],[-52,-68],[-48,-65],[-45,-65],[-40,-62],[-35,-58],[-32,-52],[-25,-48],[-22,-41],[-15,-39],[-5,-35],[-3,-41],[0,-50],[2,-50],[5,-52],[8,-60],[8,-62],[6,-61],[4,-55],[2,-53],[1,-50],[3,-51],[5,-57],[6,-57],[6,-61],[8,-63],[10,-62],[10,-65],[12,-72],[10,-75],[4,-77],[-3,-80]],
+    // Europe
+    [[71,28],[70,20],[65,14],[58,5],[51,2],[47,0],[43,3],[36,5],[35,0],[36,-5],[38,-9],[42,-9],[44,-8],[46,-2],[48,0],[48,2],[52,4],[54,10],[54,18],[56,20],[59,22],[60,25],[65,25],[65,28],[68,28],[71,28]],
+    // Africa
+    [[37,10],[32,12],[22,15],[12,15],[5,2],[0,10],[-5,12],[-10,15],[-17,12],[-20,14],[-25,15],[-30,17],[-35,19],[-34,26],[-30,31],[-25,34],[-15,37],[-10,40],[-5,40],[0,42],[5,42],[10,42],[12,44],[15,42],[20,38],[25,37],[30,32],[35,35],[37,37],[38,30],[36,22],[38,15],[37,10]],
+    // Asia (simplified)
+    [[70,30],[65,35],[60,40],[55,38],[50,40],[45,37],[40,36],[38,40],[35,36],[32,35],[28,34],[22,40],[15,44],[12,44],[10,42],[5,42],[0,42],[-5,40],[0,100],[5,103],[0,108],[-8,115],[-8,125],[0,130],[5,120],[10,108],[15,108],[20,110],[22,114],[25,120],[30,120],[35,135],[38,140],[42,142],[46,142],[50,140],[55,132],[60,140],[65,142],[68,160],[70,170],[72,160],[70,140],[68,130],[65,120],[65,100],[70,80],[72,70],[72,60],[70,50],[70,30]],
+    // Australia
+    [[-15,130],[-12,136],[-12,142],[-17,147],[-22,150],[-28,154],[-35,150],[-38,147],[-38,140],[-35,137],[-32,134],[-30,115],[-22,114],[-17,122],[-15,130]],
+    // Greenland
+    [[83,-20],[80,-18],[76,-18],[72,-22],[68,-25],[65,-37],[66,-52],[70,-55],[75,-58],[78,-72],[82,-42],[83,-20]],
+  ];
+
+  let rotation = 0;
+  const RADIUS_FRACTION = 0.42;
+  const TILT = 23.5 * Math.PI / 180; // axial tilt
+
+  function project(lat, lon, rot) {
+    const phi = lat * Math.PI / 180;
+    const lam = (lon * Math.PI / 180) + rot;
+    const x = Math.cos(phi) * Math.sin(lam);
+    const y = Math.sin(phi) * Math.cos(TILT) - Math.cos(phi) * Math.cos(lam) * Math.sin(TILT);
+    const z = Math.sin(phi) * Math.sin(TILT) + Math.cos(phi) * Math.cos(lam) * Math.cos(TILT);
+    return { x, y, z };
+  }
+
+  function resize() {
+    canvas.width = 340;
+    canvas.height = 340;
+  }
+
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2;
+    const R = W * RADIUS_FRACTION;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Draw latitude lines
+    const latLines = [-75,-60,-45,-30,-15,0,15,30,45,60,75];
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+    ctx.lineWidth = W * 0.002;
+    for (const lat of latLines) {
+      ctx.beginPath();
+      let started = false;
+      for (let lon = -180; lon <= 180; lon += 3) {
+        const p = project(lat, lon, rotation);
+        if (p.z < 0) { started = false; continue; }
+        const px = cx + p.x * R;
+        const py = cy - p.y * R;
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // Draw longitude lines
+    const lonLines = [];
+    for (let l = -180; l < 180; l += 20) lonLines.push(l);
+    for (const lon of lonLines) {
+      ctx.beginPath();
+      let started = false;
+      for (let lat = -90; lat <= 90; lat += 3) {
+        const p = project(lat, lon, rotation);
+        if (p.z < 0) { started = false; continue; }
+        const px = cx + p.x * R;
+        const py = cy - p.y * R;
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // Draw globe outline
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = W * 0.004;
+    ctx.stroke();
+
+    // Draw continents
+    ctx.strokeStyle = 'rgba(255,255,255,1)';
+    ctx.lineWidth = W * 0.003;
+    for (const continent of CONTINENTS) {
+      ctx.beginPath();
+      let started = false;
+      for (const [lat, lon] of continent) {
+        const p = project(lat, lon, rotation);
+        if (p.z < 0) { started = false; continue; }
+        const px = cx + p.x * R;
+        const py = cy - p.y * R;
+        if (!started) { ctx.moveTo(px, py); started = true; }
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function animate() {
+    rotation += 0.003;
+    draw();
+    requestAnimationFrame(animate);
+  }
+
+  resize();
+  animate();
+})();
+
+// ── Flight Path Arcs ──────────────────────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('flightCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function makeFlight() {
+    const W = canvas.width, H = canvas.height;
+    // Pick a random edge for start and a different random edge for end
+    function edgePoint() {
+      const edge = Math.floor(Math.random() * 4);
+      switch(edge) {
+        case 0: return { x: Math.random() * W, y: 0 };           // top
+        case 1: return { x: Math.random() * W, y: H };           // bottom
+        case 2: return { x: 0, y: Math.random() * H };           // left
+        case 3: return { x: W, y: Math.random() * H };           // right
+      }
+    }
+    const start = edgePoint();
+    let end = edgePoint();
+    // Make sure start and end aren't on same edge
+    while (Math.abs(end.x - start.x) < W * 0.3 && Math.abs(end.y - start.y) < H * 0.3) {
+      end = edgePoint();
+    }
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    const lift = (len * 0.28) * (Math.random() > 0.5 ? -1 : 1);
+    const ctrl = {
+      x: midX - dy / len * lift,
+      y: midY + dx / len * lift
+    };
+    return {
+      start, end, ctrl,
+      progress: 0,
+      speed: 0.00008 + Math.random() * 0.00006, // slower still
+      dashOffset: 0,
+      dashSpeed: 0.4 + Math.random() * 0.3,
+      opacity: 0.55 + Math.random() * 0.3
+    };
+  }
+
+  let flight = makeFlight();
+
+  function bezierPoint(t, p0, p1, p2) {
+    const mt = 1 - t;
+    return {
+      x: mt*mt*p0.x + 2*mt*t*p1.x + t*t*p2.x,
+      y: mt*mt*p0.y + 2*mt*t*p1.y + t*t*p2.y
+    };
+  }
+
+  function drawArc(f) {
+    const { start, end, ctrl, progress, dashOffset, opacity } = f;
+    const steps = 100;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      pts.push(bezierPoint(i / steps, start, ctrl, end));
+    }
+
+    // Full ghost trail
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.strokeStyle = `rgba(255,255,255,${opacity * 0.15})`;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 12]);
+    ctx.lineDashOffset = -dashOffset;
+    ctx.stroke();
+
+    // Active drawn segment
+    const headIdx = Math.floor(progress * steps);
+    if (headIdx < 1) return;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i <= headIdx; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.strokeStyle = `rgba(255,255,255,${opacity})`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([8, 10]);
+    ctx.lineDashOffset = -dashOffset;
+    ctx.stroke();
+
+    // Plane at head - rotated to follow path direction
+    if (headIdx > 0) {
+      const head = pts[headIdx];
+      const prev = pts[Math.max(0, headIdx - 1)];
+      const angle = Math.atan2(head.y - prev.y, head.x - prev.x);
+
+      ctx.save();
+      ctx.translate(head.x, head.y);
+      // Icon path below points "up" (nose toward -y). Travel direction is +x,
+      // so rotate by angle + 90deg to align nose with direction of travel.
+      ctx.rotate(angle + Math.PI / 2);
+      ctx.fillStyle = `rgba(255,255,255,${opacity})`;
+      ctx.setLineDash([]);
+
+      // Clean airplane silhouette, nose-up, centred near origin.
+      // Coordinates in a ~24x24 space centred at 0; scaled by s.
+      const s = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(0, -12*s);                              // nose
+      ctx.quadraticCurveTo(1.6*s, -11*s, 1.8*s, -7*s);   // upper fuselage right
+      ctx.lineTo(2*s, -3*s);
+      ctx.lineTo(12*s, 2*s);                             // right wingtip
+      ctx.lineTo(12*s, 4.5*s);
+      ctx.lineTo(2*s, 2.5*s);                            // wing trailing edge back to body
+      ctx.lineTo(2*s, 8*s);
+      ctx.lineTo(5*s, 10.5*s);                           // right tailplane tip
+      ctx.lineTo(5*s, 12*s);
+      ctx.lineTo(0, 10.5*s);                             // tail centre
+      ctx.lineTo(-5*s, 12*s);                            // left tailplane tip
+      ctx.lineTo(-5*s, 10.5*s);
+      ctx.lineTo(-2*s, 8*s);
+      ctx.lineTo(-2*s, 2.5*s);
+      ctx.lineTo(-12*s, 4.5*s);                          // left wing trailing edge
+      ctx.lineTo(-12*s, 2*s);                            // left wingtip
+      ctx.lineTo(-2*s, -3*s);
+      ctx.lineTo(-1.8*s, -7*s);
+      ctx.quadraticCurveTo(-1.6*s, -11*s, 0, -12*s);     // back to nose
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  let last = performance.now();
+  function animate(now) {
+    const dt = now - last; last = now;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    flight.progress += flight.speed * dt;
+    flight.dashOffset += flight.dashSpeed * (dt / 16);
+
+    if (flight.progress >= 1) {
+      flight = makeFlight();
+    }
+
+    drawArc(flight);
+    requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+})();
 </script>
 </body>
 </html>
